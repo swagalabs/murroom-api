@@ -16,6 +16,9 @@
       .links { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
       .links a { color: white; border: 1px solid #a997e8; border-radius: 8px; padding: 8px 12px; text-decoration: none; }
       .links a:hover { background: #49377b; }
+      .mock-guide { max-width: 1440px; margin: 20px auto; padding: 16px 20px; border: 1px solid #d7cfff; border-radius: 10px; background: #f0edff; color: #251c48; }
+      .mock-guide code { padding: 2px 5px; border-radius: 4px; background: #e3def9; }
+      .mock-guide pre { overflow-x: auto; margin: 12px 0 0; padding: 12px; border-radius: 8px; background: #201b39; color: #f4f1ff; }
       #status { margin: 16px auto 0; max-width: 1440px; padding: 0 20px; color: #625c72; }
       #swagger-ui { max-width: 1440px; margin: 0 auto; padding: 0 12px 48px; }
       .swagger-ui .topbar { display: none; }
@@ -30,6 +33,14 @@
         <a href="https://github.com/swagalabs/murroom-service/blob/main/docs/ARCHITECTURE.md">Архитектура проекта</a>
       </nav>
     </header>
+    <section class="mock-guide" aria-labelledby="mock-title">
+      <h2 id="mock-title">Browser mock API</h2>
+      <p>Кнопка <strong>Try it out</strong> в Swagger использует мок на JavaScript: он возвращает те же статусы и данные, что текущие mock-репозитории в <code>murroom-service</code>.</p>
+      <p>Из кода страницы запрос можно получить так:</p>
+      <pre><code>const response = await fetch(new URL("mock/venues", location.href));
+const venues = await response.json();</code></pre>
+      <p>Все пути из контракта доступны с префиксом <code>mock</code>, например <code>mock/auth/login</code> и <code>mock/cart</code>. Это browser-only mock: он работает после открытия этой страницы, но не является внешним HTTP-бэкендом и не предназначен для <code>curl</code>.</p>
+    </section>
     <p id="status" role="status">Загружаем контракт…</p>
     <main id="swagger-ui" aria-label="Документация API"></main>
 
@@ -47,11 +58,25 @@
         throw new Error("openapi.yaml не найден.");
       }
 
-      loadSpecification()
-        .then(({ url, yaml }) => {
-          status.textContent = `Контракт загружен из ${url}`;
+      async function enableMockApi() {
+        if (!('serviceWorker' in navigator)) {
+          throw new Error('браузер не поддерживает Service Worker');
+        }
+        await navigator.serviceWorker.register('./mock-service-worker.js');
+        await navigator.serviceWorker.ready;
+        return new URL('./mock', location.href).href.replace(/\/$/, '');
+      }
+
+      Promise.all([loadSpecification(), enableMockApi()])
+        .then(([{ url, yaml }, mockBaseUrl]) => {
+          status.textContent = `Контракт загружен из ${url}. Browser mock готов: ${mockBaseUrl}`;
+          const specification = window.jsyaml.load(yaml);
+          specification.servers = [
+            { url: mockBaseUrl, description: 'Browser mock (данные из murroom-service)' },
+            ...(specification.servers || []),
+          ];
           window.ui = SwaggerUIBundle({
-            spec: window.jsyaml.load(yaml),
+            spec: specification,
             dom_id: "#swagger-ui",
             deepLinking: true,
             displayRequestDuration: true,
