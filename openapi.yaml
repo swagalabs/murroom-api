@@ -1,0 +1,371 @@
+openapi: 3.1.0
+info:
+  title: Beauty booking API
+  version: 0.1.0-draft
+  description: |
+    Draft contract extracted from the approved UI flow. All money values are integer
+    minor units (UAH kopiykas); timestamps are RFC 3339 with an offset. This is an
+    implementation contract, not a statement about the existing backend.
+servers:
+  - url: https://api.example.com/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+  - name: Catalog
+  - name: Profile
+  - name: Cart
+  - name: Appointments
+  - name: Payments
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      security: []
+      operationId: register
+      requestBody: { $ref: '#/components/requestBodies/RegisterInput' }
+      responses:
+        '201': { $ref: '#/components/responses/Session' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /auth/login:
+    post:
+      tags: [Auth]
+      security: []
+      operationId: login
+      requestBody: { $ref: '#/components/requestBodies/LoginInput' }
+      responses:
+        '200': { $ref: '#/components/responses/Session' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/password-reset/request:
+    post:
+      tags: [Auth]
+      security: []
+      operationId: requestPasswordReset
+      requestBody: { $ref: '#/components/requestBodies/EmailInput' }
+      responses: { '202': { description: Code dispatch accepted } }
+  /auth/password-reset/confirm:
+    post:
+      tags: [Auth]
+      security: []
+      operationId: confirmPasswordReset
+      requestBody: { $ref: '#/components/requestBodies/PasswordResetInput' }
+      responses:
+        '204': { description: Password changed }
+        '422': { $ref: '#/components/responses/ValidationError' }
+  /me:
+    get:
+      tags: [Profile]
+      operationId: getMyProfile
+      responses: { '200': { $ref: '#/components/responses/Profile' } }
+    patch:
+      tags: [Profile]
+      operationId: updateMyProfile
+      requestBody: { $ref: '#/components/requestBodies/ProfilePatch' }
+      responses: { '200': { $ref: '#/components/responses/Profile' } }
+  /me/theme:
+    put:
+      tags: [Profile]
+      operationId: setTheme
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [theme], properties: { theme: { $ref: '#/components/schemas/Theme' } } }
+      responses: { '204': { description: Saved } }
+  /me/addresses:
+    get:
+      tags: [Profile]
+      operationId: listAddresses
+      responses: { '200': { $ref: '#/components/responses/AddressList' } }
+    post:
+      tags: [Profile]
+      operationId: createAddress
+      requestBody: { $ref: '#/components/requestBodies/AddressInput' }
+      responses: { '201': { $ref: '#/components/responses/Address' } }
+  /me/addresses/{addressId}:
+    parameters: [{ $ref: '#/components/parameters/AddressId' }]
+    patch:
+      tags: [Profile]
+      operationId: updateAddress
+      requestBody: { $ref: '#/components/requestBodies/AddressInput' }
+      responses: { '200': { $ref: '#/components/responses/Address' } }
+    delete:
+      tags: [Profile]
+      operationId: deleteAddress
+      responses: { '204': { description: Deleted } }
+  /favorites:
+    get:
+      tags: [Catalog]
+      operationId: listFavorites
+      responses: { '200': { $ref: '#/components/responses/VenueList' } }
+    post:
+      tags: [Catalog]
+      operationId: addFavorite
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [venueId], properties: { venueId: { $ref: '#/components/schemas/Id' } } } } }
+      responses: { '201': { description: Added } }
+  /favorites/{venueId}:
+    parameters: [{ $ref: '#/components/parameters/VenueId' }]
+    delete:
+      tags: [Catalog]
+      operationId: removeFavorite
+      responses: { '204': { description: Removed } }
+  /categories:
+    get:
+      tags: [Catalog]
+      operationId: listCategories
+      security: []
+      responses:
+        '200':
+          description: Categories available in the current locale
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Category' } } } }
+  /venues:
+    get:
+      tags: [Catalog]
+      operationId: searchVenues
+      security: []
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 100 } }
+        - { name: categoryId, in: query, schema: { $ref: '#/components/schemas/Id' } }
+        - { name: lat, in: query, schema: { type: number, format: double } }
+        - { name: lng, in: query, schema: { type: number, format: double } }
+        - { name: radiusKm, in: query, schema: { type: integer, minimum: 0, maximum: 1000, default: 20 } }
+        - { name: sort, in: query, schema: { type: string, enum: [recommended, distance, rating, price_asc, price_desc] } }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses: { '200': { $ref: '#/components/responses/VenuePage' } }
+  /venues/{venueId}:
+    parameters: [{ $ref: '#/components/parameters/VenueId' }]
+    get:
+      tags: [Catalog]
+      operationId: getVenue
+      security: []
+      responses: { '200': { $ref: '#/components/responses/VenueDetail' }, '404': { $ref: '#/components/responses/NotFound' } }
+  /venues/{venueId}/services:
+    parameters: [{ $ref: '#/components/parameters/VenueId' }]
+    get:
+      tags: [Catalog]
+      operationId: listVenueServices
+      security: []
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: categoryId, in: query, schema: { $ref: '#/components/schemas/Id' } }
+      responses:
+        '200': { description: Services grouped by category, preserving venue-defined order, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ServiceCategory' } } } } }
+  /venues/{venueId}/reviews:
+    parameters: [{ $ref: '#/components/parameters/VenueId' }]
+    get:
+      tags: [Catalog]
+      operationId: listVenueReviews
+      security: []
+      parameters:
+        - { name: filter, in: query, schema: { type: string, enum: [best, worst, newest, oldest, with_photo, without_photo] } }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses: { '200': { $ref: '#/components/responses/ReviewPage' } }
+  /cart:
+    get:
+      tags: [Cart]
+      operationId: getCart
+      responses: { '200': { $ref: '#/components/responses/Cart' } }
+    delete:
+      tags: [Cart]
+      operationId: clearCart
+      responses: { '204': { description: Cart cleared } }
+  /cart/items:
+    post:
+      tags: [Cart]
+      operationId: addCartItem
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [serviceId], properties: { serviceId: { $ref: '#/components/schemas/Id' } } } } }
+      responses: { '201': { $ref: '#/components/responses/Cart' }, '409': { $ref: '#/components/responses/Conflict' } }
+  /cart/items/{itemId}:
+    parameters: [{ $ref: '#/components/parameters/ItemId' }]
+    delete:
+      tags: [Cart]
+      operationId: removeCartItem
+      responses: { '200': { $ref: '#/components/responses/Cart' } }
+  /cart/comment:
+    put:
+      tags: [Cart]
+      operationId: setCartComment
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [comment], properties: { comment: { type: string, maxLength: 1000 } } } } }
+      responses: { '200': { $ref: '#/components/responses/Cart' } }
+  /cart/promo-code:
+    put:
+      tags: [Cart]
+      operationId: applyPromoCode
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [code], properties: { code: { type: string, minLength: 3, maxLength: 32 } } } } }
+      responses: { '200': { $ref: '#/components/responses/Cart' }, '422': { $ref: '#/components/responses/ValidationError' } }
+    delete:
+      tags: [Cart]
+      operationId: removePromoCode
+      responses: { '200': { $ref: '#/components/responses/Cart' } }
+  /cart/availability:
+    get:
+      tags: [Cart]
+      operationId: getCartAvailability
+      parameters: [{ name: from, in: query, required: true, schema: { type: string, format: date } }, { name: to, in: query, required: true, schema: { type: string, format: date } }]
+      responses: { '200': { $ref: '#/components/responses/Availability' } }
+  /cart/selection:
+    put:
+      tags: [Cart]
+      operationId: selectBookingSlot
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [staffId, startsAt], properties: { staffId: { $ref: '#/components/schemas/Id' }, startsAt: { type: string, format: date-time } } } } }
+      responses: { '200': { $ref: '#/components/responses/Cart' }, '409': { $ref: '#/components/responses/SlotUnavailable' } }
+  /payment-methods:
+    get:
+      tags: [Payments]
+      operationId: listPaymentMethods
+      responses: { '200': { $ref: '#/components/responses/PaymentMethodList' } }
+    post:
+      tags: [Payments]
+      operationId: createCardPaymentMethod
+      description: Card PAN/CVV must go directly to the PSP; this API accepts only its one-time token.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [providerToken], properties: { providerToken: { type: string, minLength: 1 }, makeDefault: { type: boolean, default: false } } } } }
+      responses: { '201': { $ref: '#/components/responses/PaymentMethod' } }
+  /payment-methods/{paymentMethodId}:
+    parameters: [{ $ref: '#/components/parameters/PaymentMethodId' }]
+    delete:
+      tags: [Payments]
+      operationId: deletePaymentMethod
+      responses: { '204': { description: Deleted } }
+  /cart/payment-method:
+    put:
+      tags: [Payments]
+      operationId: setCartPaymentMethod
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [paymentMethodId], properties: { paymentMethodId: { $ref: '#/components/schemas/Id' } } } } }
+      responses: { '200': { $ref: '#/components/responses/Cart' } }
+  /checkout:
+    post:
+      tags: [Appointments]
+      operationId: checkout
+      description: Create the booking from the current cart. Send Idempotency-Key to make retries safe.
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '201': { $ref: '#/components/responses/Appointment' }
+        '402': { $ref: '#/components/responses/PaymentRequired' }
+        '409': { $ref: '#/components/responses/SlotUnavailable' }
+  /appointments:
+    get:
+      tags: [Appointments]
+      operationId: listAppointments
+      parameters: [{ name: status, in: query, schema: { type: string, enum: [upcoming, completed, cancelled] } }]
+      responses: { '200': { $ref: '#/components/responses/AppointmentList' } }
+  /appointments/{appointmentId}:
+    parameters: [{ $ref: '#/components/parameters/AppointmentId' }]
+    get:
+      tags: [Appointments]
+      operationId: getAppointment
+      responses: { '200': { $ref: '#/components/responses/Appointment' } }
+  /appointments/{appointmentId}/availability:
+    parameters: [{ $ref: '#/components/parameters/AppointmentId' }]
+    get:
+      tags: [Appointments]
+      operationId: getRescheduleAvailability
+      parameters: [{ name: from, in: query, required: true, schema: { type: string, format: date } }, { name: to, in: query, required: true, schema: { type: string, format: date } }]
+      responses: { '200': { $ref: '#/components/responses/Availability' } }
+  /appointments/{appointmentId}/reschedule:
+    parameters: [{ $ref: '#/components/parameters/AppointmentId' }]
+    post:
+      tags: [Appointments]
+      operationId: rescheduleAppointment
+      requestBody: { $ref: '#/components/requestBodies/SlotInput' }
+      responses: { '200': { $ref: '#/components/responses/Appointment' }, '409': { $ref: '#/components/responses/SlotUnavailable' } }
+  /appointments/{appointmentId}/cancel-quote:
+    parameters: [{ $ref: '#/components/parameters/AppointmentId' }]
+    get:
+      tags: [Appointments]
+      operationId: getCancellationQuote
+      responses: { '200': { $ref: '#/components/responses/CancellationQuote' } }
+  /appointments/{appointmentId}/cancel:
+    parameters: [{ $ref: '#/components/parameters/AppointmentId' }]
+    post:
+      tags: [Appointments]
+      operationId: cancelAppointment
+      responses: { '200': { $ref: '#/components/responses/Appointment' } }
+  /appointments/{appointmentId}/review:
+    parameters: [{ $ref: '#/components/parameters/AppointmentId' }]
+    post:
+      tags: [Appointments]
+      operationId: createReview
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ReviewInput' } } }
+      responses: { '201': { $ref: '#/components/responses/Review' }, '409': { $ref: '#/components/responses/Conflict' } }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    VenueId: { name: venueId, in: path, required: true, schema: { $ref: '#/components/schemas/Id' } }
+    AddressId: { name: addressId, in: path, required: true, schema: { $ref: '#/components/schemas/Id' } }
+    ItemId: { name: itemId, in: path, required: true, schema: { $ref: '#/components/schemas/Id' } }
+    PaymentMethodId: { name: paymentMethodId, in: path, required: true, schema: { $ref: '#/components/schemas/Id' } }
+    AppointmentId: { name: appointmentId, in: path, required: true, schema: { $ref: '#/components/schemas/Id' } }
+    Cursor: { name: cursor, in: query, schema: { type: string } }
+    IdempotencyKey: { name: Idempotency-Key, in: header, required: true, schema: { type: string, format: uuid } }
+  schemas:
+    Id: { type: string, format: uuid }
+    Theme: { type: string, enum: [light, dark, system] }
+    Money: { type: object, required: [amount, currency], properties: { amount: { type: integer, description: Minor units }, currency: { type: string, const: UAH } } }
+    Image: { type: object, required: [url], properties: { url: { type: string, format: uri }, alt: { type: string } } }
+    ApiError: { type: object, required: [code, message], properties: { code: { type: string, examples: [VALIDATION_ERROR] }, message: { type: string }, details: { type: array, items: { type: object, properties: { field: { type: string }, issue: { type: string } } } } } }
+    Profile: { type: object, required: [id, firstName, lastName, email, phone, theme], properties: { id: { $ref: '#/components/schemas/Id' }, firstName: { type: string }, lastName: { type: string }, email: { type: string, format: email }, phone: { type: string, example: '+380123123123123' }, birthDate: { type: string, format: date }, gender: { type: string, enum: [female, male, non_binary, prefer_not_to_say] }, theme: { $ref: '#/components/schemas/Theme' } } }
+    Address: { type: object, required: [id, label, formatted, latitude, longitude], properties: { id: { $ref: '#/components/schemas/Id' }, label: { type: string, example: Home }, formatted: { type: string }, latitude: { type: number }, longitude: { type: number }, isDefault: { type: boolean } } }
+    Category: { type: object, required: [id, name, icon], properties: { id: { $ref: '#/components/schemas/Id' }, name: { type: string, example: Манікюр }, icon: { type: string } } }
+    VenueCard: { type: object, required: [id, name, rating, reviewCount, address, image, isFavorite], properties: { id: { $ref: '#/components/schemas/Id' }, name: { type: string }, rating: { type: number, minimum: 0, maximum: 5 }, reviewCount: { type: integer }, address: { type: string }, distanceKm: { type: number }, image: { $ref: '#/components/schemas/Image' }, isFavorite: { type: boolean }, fromPrice: { $ref: '#/components/schemas/Money' } } }
+    VenueDetail: { allOf: [{ $ref: '#/components/schemas/VenueCard' }, { type: object, required: [description, specialties, location, openingHours], properties: { description: { type: string }, specialties: { type: array, items: { $ref: '#/components/schemas/Category' } }, location: { $ref: '#/components/schemas/Address' }, openingHours: { type: array, items: { type: object, required: [weekday, opensAt, closesAt], properties: { weekday: { type: integer, minimum: 1, maximum: 7 }, opensAt: { type: string, example: '09:00' }, closesAt: { type: string, example: '20:00' } } } }, gallery: { type: array, items: { $ref: '#/components/schemas/Image' } }, averageDurationMinutes: { type: integer } } }] }
+    Service: { type: object, required: [id, name, price, durationMinutes], properties: { id: { $ref: '#/components/schemas/Id' }, name: { type: string }, description: { type: string }, price: { $ref: '#/components/schemas/Money' }, originalPrice: { $ref: '#/components/schemas/Money' }, durationMinutes: { type: integer }, badge: { type: string, enum: [hit, new] } } }
+    ServiceCategory: { type: object, required: [id, name, services], properties: { id: { $ref: '#/components/schemas/Id' }, name: { type: string }, services: { type: array, items: { $ref: '#/components/schemas/Service' } } } }
+    Staff: { type: object, required: [id, name], properties: { id: { $ref: '#/components/schemas/Id' }, name: { type: string }, avatar: { $ref: '#/components/schemas/Image' }, rating: { type: number } } }
+    Slot: { type: object, required: [startsAt, endsAt, staff], properties: { startsAt: { type: string, format: date-time }, endsAt: { type: string, format: date-time }, staff: { $ref: '#/components/schemas/Staff' } } }
+    Availability: { type: object, required: [venueId, slots], properties: { venueId: { $ref: '#/components/schemas/Id' }, slots: { type: array, items: { $ref: '#/components/schemas/Slot' } } } }
+    CartItem: { type: object, required: [id, service], properties: { id: { $ref: '#/components/schemas/Id' }, service: { $ref: '#/components/schemas/Service' } } }
+    Cart: { type: object, required: [id, venue, items, totals], properties: { id: { $ref: '#/components/schemas/Id' }, venue: { $ref: '#/components/schemas/VenueCard' }, items: { type: array, minItems: 0, items: { $ref: '#/components/schemas/CartItem' } }, comment: { type: string }, promo: { type: object, properties: { code: { type: string }, discount: { $ref: '#/components/schemas/Money' } } }, paymentMethod: { $ref: '#/components/schemas/PaymentMethod' }, selection: { $ref: '#/components/schemas/Slot' }, totals: { type: object, required: [services, discount, total], properties: { services: { $ref: '#/components/schemas/Money' }, discount: { $ref: '#/components/schemas/Money' }, tips: { $ref: '#/components/schemas/Money' }, total: { $ref: '#/components/schemas/Money' } } } } }
+    PaymentMethod: { type: object, required: [id, type, label], properties: { id: { $ref: '#/components/schemas/Id' }, type: { type: string, enum: [apple_pay, google_pay, cash, card] }, label: { type: string, example: 'Visa •••• 4242' }, isDefault: { type: boolean } } }
+    Appointment: { type: object, required: [id, status, venue, items, staff, startsAt, endsAt, payment, totals], properties: { id: { $ref: '#/components/schemas/Id' }, status: { type: string, enum: [confirmed, completed, cancelled] }, venue: { $ref: '#/components/schemas/VenueDetail' }, items: { type: array, items: { $ref: '#/components/schemas/CartItem' } }, staff: { $ref: '#/components/schemas/Staff' }, startsAt: { type: string, format: date-time }, endsAt: { type: string, format: date-time }, payment: { $ref: '#/components/schemas/PaymentMethod' }, totals: { $ref: '#/components/schemas/Cart/properties/totals' }, cancellation: { $ref: '#/components/schemas/CancellationQuote' } } }
+    CancellationQuote: { type: object, required: [refundableAmount, policyText], properties: { refundableAmount: { $ref: '#/components/schemas/Money' }, policyText: { type: string, example: 'При скасуванні менш ніж за 24 години вам повернуть лише 75% вартості.' } } }
+    ReviewInput: { type: object, required: [rating], properties: { rating: { type: integer, minimum: 1, maximum: 5 }, comment: { type: string, maxLength: 2000 }, photoUrls: { type: array, maxItems: 5, items: { type: string, format: uri } } } }
+    Review: { allOf: [{ $ref: '#/components/schemas/ReviewInput' }, { type: object, required: [id, author, createdAt], properties: { id: { $ref: '#/components/schemas/Id' }, author: { type: string, example: 'Олена М.' }, createdAt: { type: string, format: date-time } } }] }
+    PageInfo: { type: object, properties: { nextCursor: { type: [string, 'null'] } } }
+  requestBodies:
+    RegisterInput: { required: true, content: { application/json: { schema: { type: object, required: [firstName, lastName, email, password], properties: { firstName: { type: string }, lastName: { type: string }, email: { type: string, format: email }, password: { type: string, minLength: 8 }, phone: { type: string } } } } } }
+    LoginInput: { required: true, content: { application/json: { schema: { type: object, required: [email, password], properties: { email: { type: string, format: email }, password: { type: string } } } } } }
+    EmailInput: { required: true, content: { application/json: { schema: { type: object, required: [email], properties: { email: { type: string, format: email } } } } } }
+    PasswordResetInput: { required: true, content: { application/json: { schema: { type: object, required: [email, code, newPassword], properties: { email: { type: string, format: email }, code: { type: string, pattern: '^\\d{6}$' }, newPassword: { type: string, minLength: 8 } } } } } }
+    ProfilePatch: { required: true, content: { application/json: { schema: { type: object, properties: { firstName: { type: string }, lastName: { type: string }, phone: { type: string }, email: { type: string, format: email }, birthDate: { type: string, format: date }, gender: { type: string } } } } } }
+    AddressInput: { required: true, content: { application/json: { schema: { type: object, required: [label, formatted, latitude, longitude], properties: { label: { type: string }, formatted: { type: string }, latitude: { type: number }, longitude: { type: number }, isDefault: { type: boolean } } } } } }
+    SlotInput: { required: true, content: { application/json: { schema: { type: object, required: [staffId, startsAt], properties: { staffId: { $ref: '#/components/schemas/Id' }, startsAt: { type: string, format: date-time } } } } } }
+  responses:
+    Session: { description: Authenticated session, content: { application/json: { schema: { type: object, required: [accessToken, profile], properties: { accessToken: { type: string }, profile: { $ref: '#/components/schemas/Profile' } } } } } }
+    Profile: { description: Profile, content: { application/json: { schema: { $ref: '#/components/schemas/Profile' } } } }
+    Address: { description: Address, content: { application/json: { schema: { $ref: '#/components/schemas/Address' } } } }
+    AddressList: { description: Addresses, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Address' } } } } }
+    VenueDetail: { description: Venue, content: { application/json: { schema: { $ref: '#/components/schemas/VenueDetail' } } } }
+    VenueList: { description: Venues, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/VenueCard' } } } } }
+    VenuePage: { description: Paginated venues, content: { application/json: { schema: { type: object, required: [items], properties: { items: { type: array, items: { $ref: '#/components/schemas/VenueCard' } }, page: { $ref: '#/components/schemas/PageInfo' } } } } } }
+    Review: { description: Review, content: { application/json: { schema: { $ref: '#/components/schemas/Review' } } } }
+    ReviewPage: { description: Paginated reviews, content: { application/json: { schema: { type: object, properties: { items: { type: array, items: { $ref: '#/components/schemas/Review' } }, page: { $ref: '#/components/schemas/PageInfo' } } } } } }
+    Cart: { description: Cart, content: { application/json: { schema: { $ref: '#/components/schemas/Cart' } } } }
+    Availability: { description: Available slots, content: { application/json: { schema: { $ref: '#/components/schemas/Availability' } } } }
+    PaymentMethod: { description: Payment method, content: { application/json: { schema: { $ref: '#/components/schemas/PaymentMethod' } } } }
+    PaymentMethodList: { description: Payment methods, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/PaymentMethod' } } } } }
+    Appointment: { description: Appointment, content: { application/json: { schema: { $ref: '#/components/schemas/Appointment' } } } }
+    AppointmentList: { description: Appointments, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Appointment' } } } } }
+    CancellationQuote: { description: Cancellation policy for this appointment now, content: { application/json: { schema: { $ref: '#/components/schemas/CancellationQuote' } } } }
+    Unauthorized: { description: Authentication required, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    NotFound: { description: Resource not found, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    Conflict: { description: Request conflicts with current state, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    ValidationError: { description: Input is invalid, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    SlotUnavailable: { description: The selected time is no longer available; refetch availability, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+    PaymentRequired: { description: Payment was declined or needs action, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
