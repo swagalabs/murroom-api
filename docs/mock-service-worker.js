@@ -15,6 +15,7 @@ const paymentMethod = { id: "00000000-0000-4000-8000-000000000030", type: "card"
 const service = { id: "00000000-0000-4000-8000-000000000040", name: "Mock manicure", price: money, durationMinutes: 60 };
 const profile = { id: "00000000-0000-4000-8000-000000000001", firstName: "John", lastName: "Doe", email: "john.doe@example.com", phone: "+380501234567", theme: "system" };
 const address = { id: "00000000-0000-4000-8000-000000000070", label: "Home", formatted: "Kyiv, Mock Street 1", latitude: 50.4501, longitude: 30.5234, isDefault: true };
+const location = { id: "00000000-0000-4000-8000-000000000070", label: "Studio", formatted: "Kyiv, Mock Street 1", latitude: 50.4501, longitude: 30.5234 };
 const cart = { id: "00000000-0000-4000-8000-000000000050", venue, items: [{ id: "00000000-0000-4000-8000-000000000051", service }], paymentMethod, selection: slot, totals: { services: money, discount: { amount: 0, currency: "UAH" }, total: money } };
 const appointment = { id: "00000000-0000-4000-8000-000000000060", status: "confirmed", venue, items: [{ id: "00000000-0000-4000-8000-000000000051", service }], staff, startsAt: slot.startsAt, endsAt: slot.endsAt, payment: paymentMethod, totals: cart.totals };
 const review = { id: "00000000-0000-4000-8000-000000000090", rating: 5, author: "Olena M.", createdAt: "2026-10-01T10:00:00+03:00" };
@@ -41,7 +42,7 @@ function mockResponse(method, path) {
   if (method === "DELETE" && /^\/favorites\/[^/]+$/.test(path)) return json(204);
   if (method === "GET" && path === "/categories") return json(200, [{ id: "00000000-0000-4000-8000-000000000080", name: "Манікюр", icon: "sparkles" }]);
   if (method === "GET" && path === "/venues") return json(200, { items: [venue], page: { nextCursor: null } });
-  if (method === "GET" && /^\/venues\/[^/]+$/.test(path)) return json(200, { ...venue, description: "A deterministic mock venue.", specialties: [], location: address, openingHours: [] });
+  if (method === "GET" && /^\/venues\/[^/]+$/.test(path)) return json(200, { ...venue, description: "A deterministic mock venue.", specialties: [], location, openingHours: [] });
   if (method === "GET" && /^\/venues\/[^/]+\/services$/.test(path)) return json(200, [{ id: "00000000-0000-4000-8000-000000000081", name: "Manicure", services: [service] }]);
   if (method === "GET" && /^\/venues\/[^/]+\/reviews$/.test(path)) return json(200, { items: [review], page: { nextCursor: null } });
   if (method === "GET" && path === "/cart") return json(200, cart);
